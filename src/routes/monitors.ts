@@ -278,4 +278,77 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     }
 });
 
+// ============================================
+// ROUTE: GET /api/monitors/:id/stats
+// Get health check statistics for a monitor
+// ============================================
+
+router.get('/:id/stats', async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        // Check ownership
+        await checkMonitorOwnership(id, req.userId!);
+
+        // Get recent health checks (last 100)
+        const healthChecks = await prisma.healthCheck.findMany({
+            where: { monitorId: id },
+            orderBy: { checkedAt: 'desc' },
+            take: 100
+        });
+
+        if (healthChecks.length === 0) {
+            res.status(200).json({
+                message: 'No health checks yet',
+                stats: {
+                    totalChecks: 0,
+                    upCount: 0,
+                    downCount: 0,
+                    uptimePercentage: 0,
+                    averageResponseTime: 0
+                }
+            });
+            return;
+        }
+
+        // Calculate statistics
+        const totalChecks = healthChecks.length;
+        const upCount = healthChecks.filter(hc => hc.isUp).length;
+        const downCount = totalChecks - upCount;
+        const uptimePercentage = ((upCount / totalChecks) * 100).toFixed(2);
+
+        const validResponseTimes = healthChecks
+            .filter(hc => hc.responseTimeMs !== null)
+            .map(hc => hc.responseTimeMs!);
+
+        const averageResponseTime = validResponseTimes.length > 0
+            ? Math.round(validResponseTimes.reduce((a, b) => a + b, 0) / validResponseTimes.length)
+            : 0;
+
+        res.status(200).json({
+            stats: {
+                totalChecks,
+                upCount,
+                downCount,
+                uptimePercentage: parseFloat(uptimePercentage),
+                averageResponseTime,
+                recentChecks: healthChecks.slice(0, 10) // Last 10 checks
+            }
+        });
+    } catch (error: any) {
+        if (error.status) {
+            res.status(error.status).json(error.error);
+            return;
+        }
+
+        console.error('Get monitor stats error:', error);
+        res.status(500).json({
+            error: {
+                message: 'Internal server error',
+                code: 'INTERNAL_ERROR'
+            }
+        });
+    }
+});
+
 export default router;

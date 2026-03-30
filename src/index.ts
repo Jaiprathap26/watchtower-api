@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import authRouter from './routes/auth';
 import monitorsRouter from './routes/monitors';
 import { authMiddleware } from './middleware/auth';
+import { startScheduler } from './services/scheduler';
 
 // Load environment variables
 dotenv.config();
@@ -17,7 +18,7 @@ app.use(helmet());  // Security headers
 app.use(cors());    // Allow cross-origin requests
 app.use(express.json());  // Parse JSON request bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
-app.use('/api/monitors', authMiddleware, monitorsRouter);
+
 
 // ============================================
 // ROUTES
@@ -35,6 +36,9 @@ app.get('/api/health', (req: Request, res: Response) => {
 // Auth routes
 app.use('/api/auth', authRouter);
 
+// Monitor routes (protected)
+app.use('/api/monitors', authMiddleware, monitorsRouter);
+
 // 404 handler for undefined routes
 app.use((req: Request, res: Response) => {
     res.status(404).json({
@@ -50,36 +54,35 @@ app.use((req: Request, res: Response) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log('╔════════════════════════════════════════╗');
-    console.log('║   🚀 WatchTower API Server Running    ║');
-    console.log('╚════════════════════════════════════════╝');
-    console.log(`📍 Local:            http://localhost:${PORT}`);
-    console.log(`🏥 Health Check:     http://localhost:${PORT}/api/health`);
-    console.log('');
-    console.log('🔐 AUTH ROUTES:');
-    console.log(`   Register:         POST   ${PORT}/api/auth/register`);
-    console.log(`   Login:            POST   ${PORT}/api/auth/login`);
-    console.log(`   Profile:          GET    ${PORT}/api/auth/me`);
-    console.log('');
-    console.log('📊 MONITOR ROUTES:');
-    console.log(`   Create Monitor:   POST   ${PORT}/api/monitors`);
-    console.log(`   List Monitors:    GET    ${PORT}/api/monitors`);
-    console.log(`   Get Monitor:      GET    ${PORT}/api/monitors/:id`);
-    console.log(`   Update Monitor:   PUT    ${PORT}/api/monitors/:id`);
-    console.log(`   Delete Monitor:   DELETE ${PORT}/api/monitors/:id`);
-    console.log('');
-    console.log(`🌍 Environment:      ${process.env.NODE_ENV || 'development'}`);
-    console.log(`⏰ Started at:       ${new Date().toLocaleString()}`);
-    console.log('════════════════════════════════════════');
+    console.log('╔═══════════════════════════════════════════╗');
+    console.log('║  🚀 WatchTower API Server Running         ║');
+    console.log('╚═══════════════════════════════════════════╝');
+    console.log(`\n📍 Server: http://localhost:${PORT}`);
+    console.log('\n🔐 AUTH ENDPOINTS:');
+    console.log('   POST   /api/auth/register');
+    console.log('   POST   /api/auth/login');
+    console.log('   GET    /api/auth/me');
+    console.log('\n📊 MONITOR ENDPOINTS:');
+    console.log('   POST   /api/monitors');
+    console.log('   GET    /api/monitors');
+    console.log('   GET    /api/monitors/:id');
+    console.log('   GET    /api/monitors/:id/stats    - Get statistics');
+    console.log('   PUT    /api/monitors/:id');
+    console.log('   DELETE /api/monitors/:id');
+    console.log(`\n⏰ Started: ${new Date().toLocaleString()}`);
+    console.log('═══════════════════════════════════════════\n');
+
+    // Start the health check scheduler
+    startScheduler();
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
+    console.log('\n[SERVER] SIGTERM signal received: closing server');
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('SIGINT signal received: closing HTTP server');
+    console.log('\n[SERVER] SIGINT signal received: closing server');
     process.exit(0);
 });
