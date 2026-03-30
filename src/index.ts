@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import authRouter from './routes/auth';
+import monitorsRouter from './routes/monitors';
+import { authMiddleware } from './middleware/auth';
 
 // Load environment variables
 dotenv.config();
@@ -15,6 +17,7 @@ app.use(helmet());  // Security headers
 app.use(cors());    // Allow cross-origin requests
 app.use(express.json());  // Parse JSON request bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+app.use('/api/monitors', authMiddleware, monitorsRouter);
 
 // ============================================
 // ROUTES
@@ -52,9 +55,18 @@ app.listen(PORT, () => {
     console.log('╚════════════════════════════════════════╝');
     console.log(`📍 Local:            http://localhost:${PORT}`);
     console.log(`🏥 Health Check:     http://localhost:${PORT}/api/health`);
-    console.log(`🔐 Auth Register:    POST http://localhost:${PORT}/api/auth/register`);
-    console.log(`🔑 Auth Login:       POST http://localhost:${PORT}/api/auth/login`);
-    console.log(`👤 Auth Me:          GET http://localhost:${PORT}/api/auth/me`);
+    console.log('');
+    console.log('🔐 AUTH ROUTES:');
+    console.log(`   Register:         POST   ${PORT}/api/auth/register`);
+    console.log(`   Login:            POST   ${PORT}/api/auth/login`);
+    console.log(`   Profile:          GET    ${PORT}/api/auth/me`);
+    console.log('');
+    console.log('📊 MONITOR ROUTES:');
+    console.log(`   Create Monitor:   POST   ${PORT}/api/monitors`);
+    console.log(`   List Monitors:    GET    ${PORT}/api/monitors`);
+    console.log(`   Get Monitor:      GET    ${PORT}/api/monitors/:id`);
+    console.log(`   Update Monitor:   PUT    ${PORT}/api/monitors/:id`);
+    console.log(`   Delete Monitor:   DELETE ${PORT}/api/monitors/:id`);
     console.log('');
     console.log(`🌍 Environment:      ${process.env.NODE_ENV || 'development'}`);
     console.log(`⏰ Started at:       ${new Date().toLocaleString()}`);
