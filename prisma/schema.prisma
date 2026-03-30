@@ -1,0 +1,109 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// USER MODEL
+// ============================================
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  monitors     Monitor[]
+  alerts       Alert[]
+
+  @@map("users")
+}
+
+// ============================================
+// MONITOR MODEL
+// ============================================
+model Monitor {
+  id            String    @id @default(uuid())
+  userId        String
+  name          String
+  url           String
+  interval      Int       @default(300)
+  isActive      Boolean   @default(true)
+  status        String    @default("unknown")
+  lastCheckedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  healthChecks  HealthCheck[]
+  incidents     Incident[]
+  alerts        Alert[]
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("monitors")
+}
+
+// ============================================
+// HEALTH CHECK MODEL
+// ============================================
+model HealthCheck {
+  id             String   @id @default(uuid())
+  monitorId      String
+  statusCode     Int?
+  responseTimeMs Int?
+  isUp           Boolean
+  checkedAt      DateTime @default(now())
+
+  monitor        Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId])
+  @@index([checkedAt])
+  @@map("health_checks")
+}
+
+// ============================================
+// INCIDENT MODEL
+// ============================================
+model Incident {
+  id              String    @id @default(uuid())
+  monitorId       String
+  startedAt       DateTime  @default(now())
+  resolvedAt      DateTime?
+  durationSeconds Int?
+
+  monitor         Monitor   @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId])
+  @@index([startedAt])
+  @@map("incidents")
+}
+
+// ============================================
+// ALERT MODEL
+// ============================================
+model Alert {
+  id        String   @id @default(uuid())
+  userId    String
+  monitorId String?
+  type      String   @default("email")
+  value     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monitor   Monitor? @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([monitorId])
+  @@map("alerts")
+}
