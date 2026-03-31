@@ -66,7 +66,8 @@ app.listen(PORT, () => {
     console.log('   POST   /api/monitors');
     console.log('   GET    /api/monitors');
     console.log('   GET    /api/monitors/:id');
-    console.log('   GET    /api/monitors/:id/stats    - Get statistics');
+    console.log('   GET    /api/monitors/:id/checks       - Health check history');
+    console.log('   GET    /api/monitors/:id/stats        - Statistics');
     console.log('   PUT    /api/monitors/:id');
     console.log('   DELETE /api/monitors/:id');
     console.log(`\n⏰ Started: ${new Date().toLocaleString()}`);

@@ -280,60 +280,100 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 
 // ============================================
 // ROUTE: GET /api/monitors/:id/stats
-// Get health check statistics for a monitor
+// Get statistics for a monitor
 // ============================================
 
 router.get('/:id/stats', async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
 
-        // Check ownership
+        // Verify ownership
         await checkMonitorOwnership(id, req.userId!);
 
-        // Get recent health checks (last 100)
-        const healthChecks = await prisma.healthCheck.findMany({
+        // Define time windows
+        const now = Date.now();
+        const h24 = new Date(now - 24 * 60 * 60 * 1000);
+        const d7 = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        const d30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+        // Calculate 24h uptime
+        const checks24h = await prisma.healthCheck.count({
+            where: { monitorId: id, checkedAt: { gte: h24 } }
+        });
+        const upChecks24h = await prisma.healthCheck.count({
+            where: { monitorId: id, checkedAt: { gte: h24 }, isUp: true }
+        });
+        const uptime24h = checks24h > 0 ? (upChecks24h / checks24h) * 100 : 100;
+
+        // Calculate 7d uptime
+        const checks7d = await prisma.healthCheck.count({
+            where: { monitorId: id, checkedAt: { gte: d7 } }
+        });
+        const upChecks7d = await prisma.healthCheck.count({
+            where: { monitorId: id, checkedAt: { gte: d7 }, isUp: true }
+        });
+        const uptime7d = checks7d > 0 ? (upChecks7d / checks7d) * 100 : 100;
+
+        // Calculate 30d uptime
+        const checks30d = await prisma.healthCheck.count({
+            where: { monitorId: id, checkedAt: { gte: d30 } }
+        });
+        const upChecks30d = await prisma.healthCheck.count({
+            where: { monitorId: id, checkedAt: { gte: d30 }, isUp: true }
+        });
+        const uptime30d = checks30d > 0 ? (upChecks30d / checks30d) * 100 : 100;
+
+        // Calculate average response times
+        const avgResponseTime24h = await prisma.healthCheck.aggregate({
+            where: { monitorId: id, checkedAt: { gte: h24 }, responseTimeMs: { not: null } },
+            _avg: { responseTimeMs: true }
+        });
+
+        const avgResponseTime7d = await prisma.healthCheck.aggregate({
+            where: { monitorId: id, checkedAt: { gte: d7 }, responseTimeMs: { not: null } },
+            _avg: { responseTimeMs: true }
+        });
+
+        const avgResponseTime30d = await prisma.healthCheck.aggregate({
+            where: { monitorId: id, checkedAt: { gte: d30 }, responseTimeMs: { not: null } },
+            _avg: { responseTimeMs: true }
+        });
+
+        // Count total incidents
+        const totalIncidents = await prisma.incident.count({
+            where: { monitorId: id }
+        });
+
+        // Calculate current uptime streak
+        const recentChecks = await prisma.healthCheck.findMany({
             where: { monitorId: id },
+            select: { isUp: true },
             orderBy: { checkedAt: 'desc' },
             take: 100
         });
 
-        if (healthChecks.length === 0) {
-            res.status(200).json({
-                message: 'No health checks yet',
-                stats: {
-                    totalChecks: 0,
-                    upCount: 0,
-                    downCount: 0,
-                    uptimePercentage: 0,
-                    averageResponseTime: 0
-                }
-            });
-            return;
+        let currentStreak = 0;
+        for (const check of recentChecks) {
+            if (check.isUp) {
+                currentStreak++;
+            } else {
+                break;
+            }
         }
 
-        // Calculate statistics
-        const totalChecks = healthChecks.length;
-        const upCount = healthChecks.filter(hc => hc.isUp).length;
-        const downCount = totalChecks - upCount;
-        const uptimePercentage = ((upCount / totalChecks) * 100).toFixed(2);
-
-        const validResponseTimes = healthChecks
-            .filter(hc => hc.responseTimeMs !== null)
-            .map(hc => hc.responseTimeMs!);
-
-        const averageResponseTime = validResponseTimes.length > 0
-            ? Math.round(validResponseTimes.reduce((a, b) => a + b, 0) / validResponseTimes.length)
-            : 0;
-
         res.status(200).json({
-            stats: {
-                totalChecks,
-                upCount,
-                downCount,
-                uptimePercentage: parseFloat(uptimePercentage),
-                averageResponseTime,
-                recentChecks: healthChecks.slice(0, 10) // Last 10 checks
-            }
+            uptime: {
+                h24: parseFloat(uptime24h.toFixed(2)),
+                d7: parseFloat(uptime7d.toFixed(2)),
+                d30: parseFloat(uptime30d.toFixed(2))
+            },
+            avgResponseTime: {
+                h24: Math.round(avgResponseTime24h._avg.responseTimeMs || 0),
+                d7: Math.round(avgResponseTime7d._avg.responseTimeMs || 0),
+                d30: Math.round(avgResponseTime30d._avg.responseTimeMs || 0)
+            },
+            totalIncidents,
+            currentStreak
         });
     } catch (error: any) {
         if (error.status) {
@@ -342,6 +382,65 @@ router.get('/:id/stats', async (req: Request, res: Response): Promise<void> => {
         }
 
         console.error('Get monitor stats error:', error);
+        res.status(500).json({
+            error: {
+                message: 'Internal server error',
+                code: 'INTERNAL_ERROR'
+            }
+        });
+    }
+});
+
+
+// ============================================
+// ROUTE: GET /api/monitors/:id/checks
+// Get health check history for a monitor
+// ============================================
+
+router.get('/:id/checks', async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = 100;
+        const skip = (page - 1) * limit;
+
+        // Verify ownership
+        await checkMonitorOwnership(id, req.userId!);
+
+        // Get health checks
+        const checks = await prisma.healthCheck.findMany({
+            where: { monitorId: id },
+            select: {
+                id: true,
+                isUp: true,
+                statusCode: true,
+                responseTimeMs: true,
+                checkedAt: true
+            },
+            orderBy: { checkedAt: 'desc' },
+            take: limit,
+            skip: skip
+        });
+
+        // Get total count for pagination
+        const totalChecks = await prisma.healthCheck.count({
+            where: { monitorId: id }
+        });
+
+        res.status(200).json({
+            page,
+            limit,
+            totalChecks,
+            totalPages: Math.ceil(totalChecks / limit),
+            checks
+        });
+    } catch (error: any) {
+        if (error.status) {
+            res.status(error.status).json(error.error);
+            return;
+        }
+
+        console.error('Get monitor checks error:', error);
         res.status(500).json({
             error: {
                 message: 'Internal server error',
