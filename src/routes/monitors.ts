@@ -144,9 +144,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
         // Check ownership (throws error if not owned or not found)
         const monitor = await checkMonitorOwnership(id, req.userId!);
 
-        res.status(200).json({
-            monitor
-        });
+        res.status(200).json(monitor);
     } catch (error: any) {
         // Handle custom errors from checkMonitorOwnership
         if (error.status) {
@@ -434,6 +432,36 @@ router.get('/:id/checks', async (req: Request, res: Response): Promise<void> => 
             }
         });
     }
+});
+
+// GET /api/monitors/:id/incidents
+router.get('/:id/incidents', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    await checkMonitorOwnership(id, req.userId!);
+
+    const incidents = await prisma.incident.findMany({
+      where: { monitorId: id },
+      orderBy: { startedAt: 'desc' },
+      take: 50
+    });
+
+    res.status(200).json({ incidents });
+  } catch (error: any) {
+    if (error.status) {
+      res.status(error.status).json(error.error);
+      return;
+    }
+
+    console.error('Get monitor incidents error:', error);
+    res.status(500).json({
+      error: {
+        message: 'Internal server error',
+        code: 'INTERNAL_ERROR'
+      }
+    });
+  }
 });
 
 

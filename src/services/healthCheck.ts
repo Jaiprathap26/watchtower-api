@@ -20,68 +20,73 @@ interface CheckResult {
  * @param isUp - Whether the monitor is currently up
  */
 async function handleIncident(monitor: Monitor, isUp: boolean): Promise<void> {
-    try {
-        // Query for an open incident
-        const openIncident = await prisma.incident.findFirst({
-            where: {
-                monitorId: monitor.id,
-                resolvedAt: null
-            }
+  try {
+    console.log(`[DEBUG] handleIncident called for ${monitor.name}, isUp=${isUp}`);
+    
+    const openIncident = await prisma.incident.findFirst({
+      where: {
+        monitorId: monitor.id,
+        resolvedAt: null
+      }
+    });
+
+    console.log(`[DEBUG] Open incident found: ${openIncident ? 'YES' : 'NO'}`);
+
+    if (!isUp) {
+      // Monitor is DOWN
+      if (!openIncident) {
+        await prisma.incident.create({
+          data: {
+            monitorId: monitor.id,
+            startedAt: new Date()
+          }
+        });
+        console.log(`[INCIDENT] 🔴 New incident opened for ${monitor.name}`);
+      } else {
+        console.log(`[INCIDENT] 🔴 ${monitor.name} still down`);
+      }
+
+      // Update status to 'down'
+      console.log(`[DEBUG] Updating ${monitor.name} status to 'down'`);
+      const result = await prisma.monitor.update({
+        where: { id: monitor.id },
+        data: { status: 'down' }
+      });
+      console.log(`[DEBUG] Status updated successfully to: ${result.status}`);
+
+    } else {
+      // Monitor is UP
+      if (openIncident) {
+        const resolvedAt = new Date();
+        const durationSeconds = Math.round(
+          (resolvedAt.getTime() - openIncident.startedAt.getTime()) / 1000
+        );
+
+        await prisma.incident.update({
+          where: { id: openIncident.id },
+          data: {
+            resolvedAt,
+            durationSeconds
+          }
         });
 
-        if (!isUp) {
-            // Monitor is DOWN
-            if (!openIncident) {
-                // No existing incident - create new one
-                await prisma.incident.create({
-                    data: {
-                        monitorId: monitor.id,
-                        startedAt: new Date()
-                    }
-                });
+        console.log(
+          `[INCIDENT] 🟢 Incident resolved for ${monitor.name} ` +
+          `(downtime: ${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s)`
+        );
+      }
 
-                // Update monitor status to 'down'
-                await prisma.monitor.update({
-                    where: { id: monitor.id },
-                    data: { status: 'down' }
-                });
-
-                console.log(`[INCIDENT] 🔴 New incident opened for ${monitor.name}`);
-            } else {
-                console.log(`[INCIDENT] 🔴 ${monitor.name} still down`);
-            }
-        } else {
-            // Monitor is UP
-            if (openIncident) {
-                // Resolve the open incident
-                const resolvedAt = new Date();
-                const durationSeconds = Math.round(
-                    (resolvedAt.getTime() - openIncident.startedAt.getTime()) / 1000
-                );
-
-                await prisma.incident.update({
-                    where: { id: openIncident.id },
-                    data: {
-                        resolvedAt,
-                        durationSeconds
-                    }
-                });
-
-                // Update monitor status to 'up'
-                await prisma.monitor.update({
-                    where: { id: monitor.id },
-                    data: { status: 'up' }
-                });
-
-                console.log(
-                    `[INCIDENT] 🟢 Incident resolved for ${monitor.name} ` +
-                    `(downtime: ${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s)`
-                );
-            }
-        }
-    } catch (error) {
-        console.error(`[INCIDENT] Error handling incident for ${monitor.name}:`, error);
+      // Update status to 'up'
+      console.log(`[DEBUG] Updating ${monitor.name} status to 'up'`);
+      const result = await prisma.monitor.update({
+        where: { id: monitor.id },
+        data: { status: 'up' }
+      });
+      console.log(`[DEBUG] Status updated successfully to: ${result.status}`);
     }
+  } catch (error) {
+    console.error(`[ERROR] handleIncident failed for ${monitor.name}:`, error);
+  }
 }
 
 /**
