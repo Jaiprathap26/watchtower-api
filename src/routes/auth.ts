@@ -195,42 +195,39 @@ router.post('/login', authLimiter, async (req: Request, res: Response): Promise<
 // ROUTE: GET /api/auth/me
 // ============================================
 
+// GET /api/auth/me - Get current user info
 router.get('/me', authMiddleware, async (req: Request, res: Response): Promise<void> => {
-    try {
-        // userId is attached by authMiddleware
-        const user = await prisma.user.findUnique({
-            where: { id: req.userId },
-            select: {
-                id: true,
-                email: true,
-                name: true,
-                createdAt: true,
-                updatedAt: true
-            }
-        });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true
+      }
+    });
 
-        if (!user) {
-            res.status(404).json({
-                error: {
-                    message: 'User not found',
-                    code: 'USER_NOT_FOUND'
-                }
-            });
-            return;
+    if (!user) {
+      res.status(404).json({
+        error: {
+          message: 'User not found',
+          code: 'USER_NOT_FOUND'
         }
-
-        res.status(200).json({
-            user
-        });
-    } catch (error) {
-        console.error('Get user error:', error);
-        res.status(500).json({
-            error: {
-                message: 'Internal server error',
-                code: 'INTERNAL_ERROR'
-            }
-        });
+      });
+      return;
     }
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({
+      error: {
+        message: 'Internal server error',
+        code: 'INTERNAL_ERROR'
+      }
+    });
+  }
 });
 
 export default router;

@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import authRouter from './routes/auth';
 import monitorsRouter from './routes/monitors';
+import statusRouter from './routes/status'; // ADD THIS
 import { authMiddleware } from './middleware/auth';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler } from './middleware/errorHandler';
@@ -21,7 +22,6 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 // Request logger - FIRST
 app.use(requestLogger);
 
@@ -39,7 +39,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 // Auth routes
 app.use('/api/auth', authRouter);
-
+app.use('/api/status', statusRouter);
 // Monitor routes (protected)
 app.use('/api/monitors', authMiddleware, monitorsRouter);
 
@@ -57,24 +57,26 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log('╔═══════════════════════════════════════════╗');
-    console.log('║  🚀 WatchTower API Server Running         ║');
-    console.log('╚═══════════════════════════════════════════╝');
-    console.log(`\n📍 Server: http://localhost:${PORT}`);
-    console.log('\n🔐 AUTH ENDPOINTS:');
-    console.log('   POST   /api/auth/register');
-    console.log('   POST   /api/auth/login');
-    console.log('   GET    /api/auth/me');
-    console.log('\n📊 MONITOR ENDPOINTS:');
-    console.log('   POST   /api/monitors');
-    console.log('   GET    /api/monitors');
-    console.log('   GET    /api/monitors/:id');
-    console.log('   GET    /api/monitors/:id/checks       - Health check history');
-    console.log('   GET    /api/monitors/:id/stats        - Statistics');
-    console.log('   PUT    /api/monitors/:id');
-    console.log('   DELETE /api/monitors/:id');
-    console.log(`\n⏰ Started: ${new Date().toLocaleString()}`);
-    console.log('═══════════════════════════════════════════\n');
+  console.log('╔═══════════════════════════════════════════╗');
+  console.log('║  🚀 WatchTower API Server Running         ║');
+  console.log('╚═══════════════════════════════════════════╝');
+  console.log(`\n📍 Server: http://localhost:${PORT}`);
+  console.log('\n🔐 AUTH ENDPOINTS:');
+  console.log('   POST   /api/auth/register');
+  console.log('   POST   /api/auth/login');
+  console.log('   GET    /api/auth/me');
+  console.log('\n📊 MONITOR ENDPOINTS:');
+  console.log('   POST   /api/monitors');
+  console.log('   GET    /api/monitors');
+  console.log('   GET    /api/monitors/:id');
+  console.log('   GET    /api/monitors/:id/checks');
+  console.log('   GET    /api/monitors/:id/stats');
+  console.log('   PUT    /api/monitors/:id');
+  console.log('   DELETE /api/monitors/:id');
+  console.log('\n🌐 PUBLIC ENDPOINTS:');
+  console.log('   GET    /api/status/:userId        - Public status page');
+  console.log(`\n⏰ Started: ${new Date().toLocaleString()}`);
+  console.log('═══════════════════════════════════════════\n');
 
     startScheduler();
 });
