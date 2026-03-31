@@ -36,16 +36,16 @@ model Monitor {
   userId        String
   name          String
   url           String
-  interval      Int       @default(300)
+  interval      Int       @default(5)
   isActive      Boolean   @default(true)
-  status        String    @default("unknown")
+  status        String    @default("pending")
   lastCheckedAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  healthChecks  HealthCheck[]
-  incidents     Incident[]
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  healthChecks  HealthCheck[]     @relation("MonitorHealthChecks")
+  incidents     Incident[]        @relation("MonitorIncidents")
   alerts        Alert[]
 
   @@index([userId])
@@ -64,7 +64,7 @@ model HealthCheck {
   isUp           Boolean
   checkedAt      DateTime @default(now())
 
-  monitor        Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitor        Monitor  @relation("MonitorHealthChecks", fields: [monitorId], references: [id], onDelete: Cascade)
 
   @@index([monitorId])
   @@index([checkedAt])
@@ -81,7 +81,7 @@ model Incident {
   resolvedAt      DateTime?
   durationSeconds Int?
 
-  monitor         Monitor   @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitor         Monitor   @relation("MonitorIncidents", fields: [monitorId], references: [id], onDelete: Cascade)
 
   @@index([monitorId])
   @@index([startedAt])
