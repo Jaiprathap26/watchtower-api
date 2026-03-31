@@ -4,3 +4,6 @@ dist/
 *.log
 /src/generated/prisma
 .DS_Store
+client/node_modules
+client/dist
+client/.env
