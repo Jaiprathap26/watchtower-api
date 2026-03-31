@@ -15,20 +15,87 @@ interface CheckResult {
 }
 
 /**
+ * Handles incident creation and resolution
+ * @param monitor - The monitor being checked
+ * @param isUp - Whether the monitor is currently up
+ */
+async function handleIncident(monitor: Monitor, isUp: boolean): Promise<void> {
+    try {
+        // Query for an open incident
+        const openIncident = await prisma.incident.findFirst({
+            where: {
+                monitorId: monitor.id,
+                resolvedAt: null
+            }
+        });
+
+        if (!isUp) {
+            // Monitor is DOWN
+            if (!openIncident) {
+                // No existing incident - create new one
+                await prisma.incident.create({
+                    data: {
+                        monitorId: monitor.id,
+                        startedAt: new Date()
+                    }
+                });
+
+                // Update monitor status to 'down'
+                await prisma.monitor.update({
+                    where: { id: monitor.id },
+                    data: { status: 'down' }
+                });
+
+                console.log(`[INCIDENT] 🔴 New incident opened for ${monitor.name}`);
+            } else {
+                console.log(`[INCIDENT] 🔴 ${monitor.name} still down`);
+            }
+        } else {
+            // Monitor is UP
+            if (openIncident) {
+                // Resolve the open incident
+                const resolvedAt = new Date();
+                const durationSeconds = Math.round(
+                    (resolvedAt.getTime() - openIncident.startedAt.getTime()) / 1000
+                );
+
+                await prisma.incident.update({
+                    where: { id: openIncident.id },
+                    data: {
+                        resolvedAt,
+                        durationSeconds
+                    }
+                });
+
+                // Update monitor status to 'up'
+                await prisma.monitor.update({
+                    where: { id: monitor.id },
+                    data: { status: 'up' }
+                });
+
+                console.log(
+                    `[INCIDENT] 🟢 Incident resolved for ${monitor.name} ` +
+                    `(downtime: ${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s)`
+                );
+            }
+        }
+    } catch (error) {
+        console.error(`[INCIDENT] Error handling incident for ${monitor.name}:`, error);
+    }
+}
+
+/**
  * Checks a single monitor by fetching its URL
- * Records the result in the database
- * @param monitor - The monitor to check
+ * Records the result and handles incidents
  */
 export async function checkMonitor(monitor: Monitor): Promise<void> {
     const startTime = Date.now();
     let result: CheckResult;
 
     try {
-        // Create abort controller for timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        // Fetch the URL
         const response = await fetch(monitor.url, {
             method: 'GET',
             signal: controller.signal,
@@ -39,10 +106,7 @@ export async function checkMonitor(monitor: Monitor): Promise<void> {
 
         clearTimeout(timeoutId);
 
-        // Calculate response time
         const responseTimeMs = Date.now() - startTime;
-
-        // Determine if monitor is "up" (any 2xx or 3xx status is considered up)
         const isUp = response.status >= 200 && response.status < 400;
 
         result = {
@@ -51,10 +115,9 @@ export async function checkMonitor(monitor: Monitor): Promise<void> {
             isUp
         };
 
-        console.log(`[CHECK] ${monitor.name} (${monitor.url}) → ${response.status} in ${responseTimeMs}ms`);
+        console.log(`[CHECK] ${monitor.name} → ${response.status} in ${responseTimeMs}ms`);
 
     } catch (error: any) {
-        // Handle all failure cases
         const responseTimeMs = Date.now() - startTime;
 
         let errorMessage = 'Unknown error';
@@ -80,7 +143,7 @@ export async function checkMonitor(monitor: Monitor): Promise<void> {
             error: errorMessage
         };
 
-        console.log(`[CHECK] ${monitor.name} (${monitor.url}) → FAILED: ${errorMessage} (${responseTimeMs}ms)`);
+        console.log(`[CHECK] ${monitor.name} → FAILED: ${errorMessage}`);
     }
 
     try {
@@ -94,16 +157,16 @@ export async function checkMonitor(monitor: Monitor): Promise<void> {
             }
         });
 
-        // Update monitor status and last checked time
-        const newStatus = result.isUp ? 'up' : 'down';
-
+        // Update monitor's last checked time
         await prisma.monitor.update({
             where: { id: monitor.id },
             data: {
-                status: newStatus,
                 lastCheckedAt: new Date()
             }
         });
+
+        // Handle incident creation/resolution
+        await handleIncident(monitor, result.isUp);
 
     } catch (dbError) {
         console.error(`[ERROR] Failed to save health check for ${monitor.name}:`, dbError);
