@@ -5,31 +5,35 @@ import dotenv from 'dotenv';
 import authRouter from './routes/auth';
 import monitorsRouter from './routes/monitors';
 import { authMiddleware } from './middleware/auth';
+import { requestLogger } from './middleware/requestLogger';
+import { errorHandler } from './middleware/errorHandler';
+import { AppError } from './lib/errors';
 import { startScheduler } from './services/scheduler';
 
-// Load environment variables
 dotenv.config();
 
-// Initialize Express app
 const app = express();
 
-// Middleware
-app.use(helmet());  // Security headers
-app.use(cors());    // Allow cross-origin requests
-app.use(express.json());  // Parse JSON request bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+// ============================================
+// MIDDLEWARE (ORDER MATTERS!)
+// ============================================
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
+// Request logger - FIRST
+app.use(requestLogger);
 
 // ============================================
 // ROUTES
 // ============================================
 
-// Health check route
+// Health check
 app.get('/api/health', (req: Request, res: Response) => {
     res.status(200).json({
         status: 'ok',
-        timestamp: new Date().toISOString(),
-        service: 'WatchTower API'
+        timestamp: new Date().toISOString()
     });
 });
 
@@ -39,20 +43,19 @@ app.use('/api/auth', authRouter);
 // Monitor routes (protected)
 app.use('/api/monitors', authMiddleware, monitorsRouter);
 
-// 404 handler for undefined routes
+// 404 handler - catch all undefined routes
 app.use((req: Request, res: Response) => {
-    res.status(404).json({
-        error: {
-            message: 'Route not found',
-            code: 'ROUTE_NOT_FOUND',
-            path: req.originalUrl
-        }
-    });
+    throw new AppError('Route not found', 404, 'ROUTE_NOT_FOUND');
 });
 
+// Error handler - LAST
+app.use(errorHandler);
 
-// Start server
+// ============================================
+// START SERVER
+// ============================================
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
     console.log('╔═══════════════════════════════════════════╗');
     console.log('║  🚀 WatchTower API Server Running         ║');
@@ -73,11 +76,9 @@ app.listen(PORT, () => {
     console.log(`\n⏰ Started: ${new Date().toLocaleString()}`);
     console.log('═══════════════════════════════════════════\n');
 
-    // Start the health check scheduler
     startScheduler();
 });
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('\n[SERVER] SIGTERM signal received: closing server');
     process.exit(0);

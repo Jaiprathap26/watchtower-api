@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
+import { AppError } from '../lib/errors';
 
 const router = Router();
 
@@ -36,30 +37,15 @@ const updateMonitorSchema = z.object({
  * @throws 404 if monitor doesn't exist, 403 if not owned by user
  */
 async function checkMonitorOwnership(monitorId: string, userId: string) {
-    const monitor = await prisma.monitor.findUnique({
-        where: { id: monitorId }
+    const monitor = await prisma.monitor.findFirst({
+        where: {
+            id: monitorId,
+            userId: userId
+        }
     });
 
-    // Monitor doesn't exist at all
     if (!monitor) {
-        throw {
-            status: 404,
-            error: {
-                message: 'Monitor not found',
-                code: 'MONITOR_NOT_FOUND'
-            }
-        };
-    }
-
-    // Monitor exists but belongs to someone else
-    if (monitor.userId !== userId) {
-        throw {
-            status: 403,
-            error: {
-                message: 'Access denied: you do not own this monitor',
-                code: 'FORBIDDEN'
-            }
-        };
+        throw new AppError('Monitor not found', 404, 'MONITOR_NOT_FOUND');
     }
 
     return monitor;

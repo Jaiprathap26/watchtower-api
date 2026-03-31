@@ -1,46 +1,29 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../lib/jwt';
+import { AppError } from '../lib/errors';
 
-/**
- * Authentication middleware
- * Verifies JWT token from Authorization header and attaches userId to request
- */
 export const authMiddleware = (
     req: Request,
     res: Response,
     next: NextFunction
 ): void => {
     try {
-        // Extract token from Authorization header
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            res.status(401).json({
-                error: {
-                    message: 'No token provided',
-                    code: 'NO_TOKEN'
-                }
-            });
-            return;
+            throw new AppError('No token provided', 401, 'NO_TOKEN');
         }
 
-        // Remove 'Bearer ' prefix to get the token
         const token = authHeader.substring(7);
-
-        // Verify token and extract userId
         const { userId } = verifyToken(token);
-
-        // Attach userId to request object for use in route handlers
         req.userId = userId;
 
-        // Proceed to next middleware/route handler
         next();
     } catch (error) {
-        res.status(401).json({
-            error: {
-                message: 'Invalid or expired token',
-                code: 'INVALID_TOKEN'
-            }
-        });
+        if (error instanceof AppError) {
+            next(error);
+        } else {
+            next(new AppError('Invalid or expired token', 401, 'INVALID_TOKEN'));
+        }
     }
 };
