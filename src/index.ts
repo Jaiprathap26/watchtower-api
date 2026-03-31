@@ -10,6 +10,7 @@ import { requestLogger } from './middleware/requestLogger';
 import { errorHandler } from './middleware/errorHandler';
 import { AppError } from './lib/errors';
 import { startScheduler } from './services/scheduler';
+import alertsRouter from './routes/alerts';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Request logger - FIRST
 app.use(requestLogger);
+app.use('/api/alerts', authMiddleware, alertsRouter);
 
 // ============================================
 // ROUTES

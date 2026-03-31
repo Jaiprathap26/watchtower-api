@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import { sendDownAlert, sendRecoveryAlert } from './emailService';
 
 interface Monitor {
     id: string;
@@ -21,8 +22,6 @@ interface CheckResult {
  */
 async function handleIncident(monitor: Monitor, isUp: boolean): Promise<void> {
   try {
-    console.log(`[DEBUG] handleIncident called for ${monitor.name}, isUp=${isUp}`);
-    
     const openIncident = await prisma.incident.findFirst({
       where: {
         monitorId: monitor.id,
@@ -30,29 +29,46 @@ async function handleIncident(monitor: Monitor, isUp: boolean): Promise<void> {
       }
     });
 
-    console.log(`[DEBUG] Open incident found: ${openIncident ? 'YES' : 'NO'}`);
-
     if (!isUp) {
       // Monitor is DOWN
       if (!openIncident) {
+        // Create new incident
         await prisma.incident.create({
           data: {
             monitorId: monitor.id,
             startedAt: new Date()
           }
         });
+
         console.log(`[INCIDENT] 🔴 New incident opened for ${monitor.name}`);
+
+        // Send down alerts
+        try {
+          const alerts = await prisma.alert.findMany({
+            where: {
+              userId: monitor.userId,
+              isActive: true,
+              type: 'email'
+            }
+          });
+
+          for (const alert of alerts) {
+            await sendDownAlert(alert.value, {
+              name: monitor.name,
+              url: monitor.url
+            });
+          }
+        } catch (emailError) {
+          console.error('[EMAIL] Error sending down alerts:', emailError);
+        }
       } else {
         console.log(`[INCIDENT] 🔴 ${monitor.name} still down`);
       }
 
-      // Update status to 'down'
-      console.log(`[DEBUG] Updating ${monitor.name} status to 'down'`);
-      const result = await prisma.monitor.update({
+      await prisma.monitor.update({
         where: { id: monitor.id },
         data: { status: 'down' }
       });
-      console.log(`[DEBUG] Status updated successfully to: ${result.status}`);
 
     } else {
       // Monitor is UP
@@ -74,18 +90,35 @@ async function handleIncident(monitor: Monitor, isUp: boolean): Promise<void> {
           `[INCIDENT] 🟢 Incident resolved for ${monitor.name} ` +
           `(downtime: ${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s)`
         );
+
+        // Send recovery alerts
+        try {
+          const alerts = await prisma.alert.findMany({
+            where: {
+              userId: monitor.userId,
+              isActive: true,
+              type: 'email'
+            }
+          });
+
+          for (const alert of alerts) {
+            await sendRecoveryAlert(alert.value, {
+              name: monitor.name,
+              url: monitor.url
+            }, durationSeconds);
+          }
+        } catch (emailError) {
+          console.error('[EMAIL] Error sending recovery alerts:', emailError);
+        }
       }
 
-      // Update status to 'up'
-      console.log(`[DEBUG] Updating ${monitor.name} status to 'up'`);
-      const result = await prisma.monitor.update({
+      await prisma.monitor.update({
         where: { id: monitor.id },
         data: { status: 'up' }
       });
-      console.log(`[DEBUG] Status updated successfully to: ${result.status}`);
     }
   } catch (error) {
-    console.error(`[ERROR] handleIncident failed for ${monitor.name}:`, error);
+    console.error(`[INCIDENT] Error handling incident for ${monitor.name}:`, error);
   }
 }
 
