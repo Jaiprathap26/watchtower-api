@@ -1,9 +1,15 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
+build/
+logs/
 *.log
 /src/generated/prisma
 .DS_Store
 client/node_modules
 client/dist
 client/.env
+.vscode/
+.idea/

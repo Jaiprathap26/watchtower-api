@@ -1,19 +1,25 @@
+
 {
   "name": "watchtower-api",
   "version": "1.0.0",
-  "description": "WatchTower backend API server",
-  "main": "index.js",
+  "description": "WatchTower API - Website Monitoring Backend",
+  "main": "src/index.ts",
   "scripts": {
     "dev": "nodemon --exec tsx src/index.ts",
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "migrate": "npx prisma migrate deploy",
+    "generate": "npx prisma generate",
+    "studio": "npx prisma studio",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Jaiprathap26/watchtower-api.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["monitoring", "uptime", "api"],
+  "author": "Jaiprathap R",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/Jaiprathap26/watchtower-api/issues"
@@ -41,7 +47,12 @@
     "@types/node": "^25.5.0",
     "@types/node-cron": "^3.0.11",
     "nodemon": "^3.1.14",
+    "prisma": "^5.22.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
+  },
+   "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
