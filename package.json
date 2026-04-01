@@ -5,8 +5,9 @@
   "description": "WatchTower API - Website Monitoring Backend",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "nodemon --exec tsx src/index.ts",
+    "dev": "npx prisma migrate deploy && npx prisma generate && tsx src/index.ts",
     "start": "tsx src/index.ts",
+    "postinstall": "npx prisma generate",
     "migrate": "npx prisma migrate deploy",
     "generate": "npx prisma generate",
     "studio": "npx prisma studio",
